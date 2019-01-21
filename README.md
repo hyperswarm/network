@@ -3,7 +3,7 @@
 The low level networking guts of the Hyperswarm stack as a seperate module
 
 ```
-npm install @hyperswrm/guts
+npm install @hyperswarm/guts
 ```
 
 ## Usage
