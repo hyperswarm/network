@@ -1,6 +1,6 @@
 # @hyperswarm/guts
 
-The low level networking guts of the Hyperswarm stack as a seperate module
+The low level networking guts of the Hyperswarm stack as a separate module
 
 ```
 npm install @hyperswarm/guts
