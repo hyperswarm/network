@@ -15,7 +15,7 @@ class NetworkResource extends Nanoresource {
     this.tcp = net.createServer()
     this.utp = utp()
     this.discovery = null
-    this.options = opts || {}
+    this.options = opts
     this.sockets = new Set()
 
     this._onopen = opts.open || noop
