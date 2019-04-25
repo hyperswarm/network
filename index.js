@@ -8,9 +8,7 @@ module.exports = (opts, handlers) => new NetworkResource(opts, handlers)
 class NetworkResource extends Nanoresource {
   constructor (opts) {
     if (!opts) opts = {}
-
     super()
-
     this.preferredPort = opts.preferredPort || 0
     this.tcp = net.createServer()
     this.utp = utp()
@@ -107,10 +105,20 @@ class NetworkResource extends Nanoresource {
     this.discovery.lookup(key, cb)
   }
 
+  _bindWrap (cb) {
+    if (typeof this.options.bind !== 'function') return cb
+    return () => {
+      this.options.bind()
+      return cb()
+    }
+  }
+
   bind (preferredPort, cb) {
-    if (typeof preferredPort === 'function') return this.open(preferredPort)
+    if (typeof preferredPort === 'function') {
+      return this.open(this._bindWrap(preferredPort))
+    }
     this.preferredPort = preferredPort || 0
-    this.open(cb)
+    this.open(this._bindWrap(cb))
   }
 
   _open (cb) {
