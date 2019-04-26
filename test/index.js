@@ -2,6 +2,7 @@
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
 const { Socket } = require('net')
+const UTP = require('utp-native')
 const once = require('events.once')
 const { test, only } = require('tap')
 const guts = require('..')
@@ -22,6 +23,11 @@ const promisifyApi = (o) => {
   }
 }
 
+function validSocket (s) {
+  if (!s) return false
+  return (s instanceof Socket) || (s._utp && s._utp instanceof UTP)
+}
+
 test('socket recieved – socket option – (address details based connection)', async ({is, plan}) => {
   // there is an unfixed stateful bug which makes
   // this test non-atomic causing the socket method to never be called. 
@@ -34,7 +40,7 @@ test('socket recieved – socket option – (address details based connection)'
   plan(1)
   const network = promisifyApi(guts({
     socket(sock) {
-      is(sock instanceof Socket, true)
+      is(validSocket(sock), true)
     }
   }))
   await network.bind()
@@ -98,7 +104,7 @@ test('socket recieved – socket option – (lookup based connection)', async (
   plan(1)
   const network = promisifyApi(guts({
     socket(sock) {
-      is(sock instanceof Socket, true)
+      is(validSocket(sock), true)
     }
   }))
   await network.bind()
@@ -219,7 +225,7 @@ test('referrer node (remote peer)', async ({ ok, pass }) => {
 //   plan(1)
 //   const network = promisifyApi(guts({
 //     socket(sock) {
-//       is(sock instanceof Socket, true)
+//       is(validSocket(sock), true)
 //     }
 //   }))
 //   await network.bind()

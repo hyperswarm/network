@@ -19,6 +19,7 @@ class NetworkResource extends Nanoresource {
     this._onopen = opts.open || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
+    this._onbind = opts.bind || noop
 
     this.utp.on('connection', this._onincoming.bind(this, false))
     this.tcp.on('connection', this._onincoming.bind(this, true))
@@ -105,20 +106,12 @@ class NetworkResource extends Nanoresource {
     this.discovery.lookup(key, cb)
   }
 
-  _bindWrap (cb) {
-    if (typeof this.options.bind !== 'function') return cb
-    return () => {
-      this.options.bind()
-      return cb()
-    }
-  }
-
   bind (preferredPort, cb) {
     if (typeof preferredPort === 'function') {
-      return this.open(this._bindWrap(preferredPort))
+      return this.open(preferredPort)
     }
     this.preferredPort = preferredPort || 0
-    this.open(this._bindWrap(cb))
+    this.open(cb)
   }
 
   _open (cb) {
@@ -136,6 +129,7 @@ class NetworkResource extends Nanoresource {
     function onlisten () {
       self.discovery = discovery({ socket: self.utp })
       self._onopen()
+      self._onbind()
       cb(null)
     }
   }
