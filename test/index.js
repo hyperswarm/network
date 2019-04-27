@@ -1,10 +1,11 @@
 'use strict'
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
-const { Socket } = require('net')
+const net = require('net')
+const dgram = require('dgram')
 const UTP = require('utp-native')
 const once = require('events.once')
-const { test } = require('tap')
+const { test, only } = require('tap')
 const guts = require('..')
 
 const promisifyApi = (o) => {
@@ -32,7 +33,7 @@ const when = () => {
 
 function validSocket (s) {
   if (!s) return false
-  return (s instanceof Socket) || (s._utp && s._utp instanceof UTP)
+  return (s instanceof net.Socket) || (s._utp && s._utp instanceof UTP)
 }
 
 test('network bound – bind option', async ({ pass, plan }) => {
@@ -59,14 +60,14 @@ test('connect two peers with address details', async ({ is, pass }) => {
   const { port } = network.address()
   const host = '127.0.0.1'
   const socket = await client.connect({ port, host })
-  is(socket instanceof Socket, true, 'got client socket')
+  is(validSocket(socket), true, 'got client socket')
   await client.close()
   pass('client closed')
   await network.close()
   pass('network closed')
 })
 
-test('connect two peers with via lookup', async ({ is, pass }) => {
+test('connect two peers via lookup', async ({ is, pass }) => {
   const network = promisifyApi(guts())
   await network.bind()
   const client = promisifyApi(guts())
@@ -75,7 +76,7 @@ test('connect two peers with via lookup', async ({ is, pass }) => {
   await client.bind()
   const peer = await client.lookupOne(topic)
   const socket = await client.connect(peer)
-  is(socket instanceof Socket, true, 'got client socket')
+  is(validSocket(socket), true, 'got client socket')
   await client.close()
   pass('client closed')
   await network.close()
@@ -167,7 +168,7 @@ test('send data to client peer', async ({ is }) => {
   await until.done()
 })
 
-test('send data bidrectionally between network and client', async ({ is }) => {
+test('send data bidirectionally between network and client', async ({ is }) => {
   const until = when()
   const network = promisifyApi(guts({
     async socket (socket) {
@@ -193,27 +194,26 @@ test('send data bidrectionally between network and client', async ({ is }) => {
   await until.done()
 })
 
-test('two networks, connect and close', async ({ ok, pass }) => {
-  const until = when()
-  const network = promisifyApi(guts({
-    async socket (sock) {
-      ok(sock, 'got server socket')
-      await network.close()
-      await client.close()
-      await client.close()
-      pass('client closed')
-      await network.close()
-      pass('network closed')
-      until()
-    }
-  }))
+test('referrer node (peer info from DHT)', async ({ is }) => {
+  const network = promisifyApi(guts())
   await network.bind()
   const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  const socket = await client.connect({ port, host })
-  ok(socket, 'got client socket')
-  await until.done()
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  const connecting = client.connect({ 
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: { 
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
+  const [ msg ] = await once(referrer, 'message')
+  is(/_holepunch/.test(msg), true, 'triggers a holepunch command to referrer node')
+  // not strictly necessary, since we would never get msg
+  // if client was connected, however for explicitness sake: 
+  await connecting
+  await network.close()
+  await client.close()
+  await promisify(referrer.close.bind(referrer))()
 })
-
-test('referrer node (remote peer)')

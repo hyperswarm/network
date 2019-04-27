@@ -54,7 +54,6 @@ class NetworkResource extends Nanoresource {
         if (!--closes) return cb(new Error('Could not connect'))
         return
       }
-
       self.discovery.holepunch(peer, onholepunch)
     }
 
