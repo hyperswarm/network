@@ -5,7 +5,7 @@ const net = require('net')
 const dgram = require('dgram')
 const UTP = require('utp-native')
 const once = require('events.once')
-const { test } = require('tap')
+const { test, only } = require('tap')
 const guts = require('..')
 
 const promisifyApi = (o) => {
@@ -44,6 +44,7 @@ test('network bound – bind option', async ({ pass, plan }) => {
   await network.bind()
   await network.close()
 })
+
 test('network closed – close option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({
@@ -51,6 +52,24 @@ test('network closed – close option', async ({ pass, plan }) => {
   }))
   await network.bind()
   await network.close()
+})
+
+test('announce before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.announce(topic), Error('Bind before announcing'))
+})
+
+test('lookupOne before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.lookupOne(topic), Error('Bind before doing a lookup'))
+})
+
+test('lookup before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.lookup(topic), Error('Bind before doing a lookup'))
 })
 
 test('connect two peers with address details', async ({ is, pass }) => {
