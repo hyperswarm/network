@@ -8,9 +8,7 @@ module.exports = (opts, handlers) => new NetworkResource(opts, handlers)
 class NetworkResource extends Nanoresource {
   constructor (opts) {
     if (!opts) opts = {}
-
     super()
-
     this.preferredPort = opts.preferredPort || 0
     this.tcp = net.createServer()
     this.utp = utp()
@@ -18,7 +16,7 @@ class NetworkResource extends Nanoresource {
     this.options = opts
     this.sockets = new Set()
 
-    this._onopen = opts.open || noop
+    this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
 
@@ -108,7 +106,9 @@ class NetworkResource extends Nanoresource {
   }
 
   bind (preferredPort, cb) {
-    if (typeof preferredPort === 'function') return this.open(preferredPort)
+    if (typeof preferredPort === 'function') {
+      return this.open(preferredPort)
+    }
     this.preferredPort = preferredPort || 0
     this.open(cb)
   }
@@ -127,7 +127,7 @@ class NetworkResource extends Nanoresource {
 
     function onlisten () {
       self.discovery = discovery({ socket: self.utp })
-      self._onopen()
+      self._onbind()
       cb(null)
     }
   }
