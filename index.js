@@ -3,7 +3,7 @@ const net = require('net')
 const Nanoresource = require('nanoresource')
 const discovery = require('@hyperswarm/discovery')
 
-module.exports = (opts, handlers) => new NetworkResource(opts, handlers)
+module.exports = (opts) => new NetworkResource(opts)
 
 class NetworkResource extends Nanoresource {
   constructor (opts) {
@@ -59,7 +59,6 @@ class NetworkResource extends Nanoresource {
 
     function onholepunch (err) {
       if (connected) return
-
       if (err) {
         if (!--closes) return cb(err)
         return
