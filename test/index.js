@@ -4,7 +4,7 @@ const { promisify } = require('util')
 const { Socket } = require('net')
 const UTP = require('utp-native')
 const once = require('events.once')
-const { test, only } = require('tap')
+const { test } = require('tap')
 const guts = require('..')
 
 const promisifyApi = (o) => {
@@ -23,48 +23,30 @@ const promisifyApi = (o) => {
   }
 }
 
+const when = () => {
+  var done
+  const fn = () => done()
+  fn.done = promisify((cb) => { done = cb })
+  return fn
+}
+
 function validSocket (s) {
   if (!s) return false
   return (s instanceof Socket) || (s._utp && s._utp instanceof UTP)
 }
 
-test('socket recieved – socket option – (address details based connection)', async ({is, plan}) => {
-  // there is an unfixed stateful bug which makes
-  // this test non-atomic causing the socket method to never be called. 
-  // Temporary workaround is to place this test first – TODO: move rest to above 
-  // other socket recieved test
-  // NOTE: it may be utp-native, as even stripping all modules except utp-native 
-  // out of the require cache to get a fresh state fails. We can't strip utp-native
-  // from the require cache, it leads to an error (probably to do with Node expecations
-  // around native bindings, error is Module did not self register)
+test('network bound – bind option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({
-    socket(sock) {
-      is(validSocket(sock), true)
-    }
-  }))
-  await network.bind()
-  const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  await client.connect({ port, host })
-  await network.close()
-  await client.close()
-})
-
-
-test('network bound – bind option', async ({pass, plan}) => {
-  plan(1)
-  const network = promisifyApi(guts({
-    bind() { pass('method called') }
+    bind () { pass('method called') }
   }))
   await network.bind()
   await network.close()
 })
-test('network closed – close option', async ({pass, plan}) => {
+test('network closed – close option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({
-    close() { pass('method called') }
+    close () { pass('method called') }
   }))
   await network.bind()
   await network.close()
@@ -100,11 +82,32 @@ test('connect two peers with via lookup', async ({ is, pass }) => {
   pass('network closed')
 })
 
-test('socket recieved – socket option – (lookup based connection)', async ({is, plan}) => {
-  plan(1)
+test('socket recieved – socket option – (address details based connection)', async ({ is }) => {
+  const until = when()
   const network = promisifyApi(guts({
-    socket(sock) {
+    async socket (sock) {
       is(validSocket(sock), true)
+      await network.close()
+      await client.close()
+      until()
+    }
+  }))
+  await network.bind()
+  const client = promisifyApi(guts())
+  const { port } = network.address()
+  const host = '127.0.0.1'
+  await client.connect({ port, host })
+  await until.done()
+})
+
+test('socket recieved – socket option – (lookup based connection)', async ({ is }) => {
+  const until = when()
+  const network = promisifyApi(guts({
+    async socket (sock) {
+      is(validSocket(sock), true)
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
@@ -115,16 +118,18 @@ test('socket recieved – socket option – (lookup based connection)', async (
   await client.bind()
   const peer = await client.lookupOne(topic)
   await client.connect(peer)
-  await network.close()
-  await client.close()
+  await until.done()
 })
 
-test('send data to network peer', async ({ is, plan }) => {
-  plan(1)
+test('send data to network peer', async ({ is }) => {
+  const until = when()
   const network = promisifyApi(guts({
     async socket (sock) {
       const [ data ] = await once(sock, 'data')
       is(data.toString(), 'test')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
@@ -136,14 +141,17 @@ test('send data to network peer', async ({ is, plan }) => {
   const peer = await client.lookupOne(topic)
   const socket = await client.connect(peer)
   socket.write('test')
-  await network.close()
-  await client.close()
+  await until.done()
 })
 
 test('send data to client peer', async ({ is }) => {
+  const until = when()
   const network = promisifyApi(guts({
-    socket (socket) {
+    async socket (socket) {
       socket.write('test')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
@@ -156,17 +164,19 @@ test('send data to client peer', async ({ is }) => {
   const socket = await client.connect(peer)
   const [ data ] = await once(socket, 'data')
   is(data.toString(), 'test')
-  await network.close()
-  await client.close()
+  await until.done()
 })
 
-test('send data bidrectionally between network and client', async ({ is, plan }) => {
-  plan(2)
+test('send data bidrectionally between network and client', async ({ is }) => {
+  const until = when()
   const network = promisifyApi(guts({
     async socket (socket) {
       const [ data ] = await once(socket, 'data')
       is(data.toString(), 'from client')
       socket.write('from network')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
@@ -180,13 +190,22 @@ test('send data bidrectionally between network and client', async ({ is, plan })
   socket.write('from client')
   const [ data ] = await once(socket, 'data')
   is(data.toString(), 'from network')
-  await network.close()
-  await client.close()
+  await until.done()
 })
 
 test('two networks, connect and close', async ({ ok, pass }) => {
+  const until = when()
   const network = promisifyApi(guts({
-    socket (sock) { ok(sock, 'got server socket') }
+    async socket (sock) {
+      ok(sock, 'got server socket')
+      await network.close()
+      await client.close()
+      await client.close()
+      pass('client closed')
+      await network.close()
+      pass('network closed')
+      until()
+    }
   }))
   await network.bind()
   const client = promisifyApi(guts())
@@ -194,45 +213,7 @@ test('two networks, connect and close', async ({ ok, pass }) => {
   const host = '127.0.0.1'
   const socket = await client.connect({ port, host })
   ok(socket, 'got client socket')
-  await client.close()
-  pass('client closed')
-  await network.close()
-  pass('network closed')
+  await until.done()
 })
 
-test('referrer node (remote peer)', async ({ ok, pass }) => {
-  const network = promisifyApi(guts({
-    socket (sock) { ok(sock, 'got server socket') }
-  }))
-  await network.bind()
-  const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  const socket = await client.connect({ port, host })
-  ok(socket, 'got client socket')
-  await client.close()
-  pass('client closed')
-  await network.close()
-  pass('network closed')
-})
-
-
-// enable this test when bug is fixed/to fix bug, see first test
-// test('bug-fix – statefulness issue: ensure socket method option is called on a instance that is bind after prior instance is bound and closed', async ({is, plan}) => {
-//   const x = promisifyApi(guts())
-//   await x.bind()
-//   await x.close()
-//   plan(1)
-//   const network = promisifyApi(guts({
-//     socket(sock) {
-//       is(validSocket(sock), true)
-//     }
-//   }))
-//   await network.bind()
-//   const client = promisifyApi(guts())
-//   const { port } = network.address()
-//   const host = '127.0.0.1'
-//   await client.connect({ port, host })
-//   await network.close()
-//   await client.close()
-// })
+test('referrer node (remote peer)')
