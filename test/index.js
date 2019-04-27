@@ -5,7 +5,7 @@ const net = require('net')
 const dgram = require('dgram')
 const UTP = require('utp-native')
 const once = require('events.once')
-const { test, only } = require('tap')
+const { test } = require('tap')
 const guts = require('..')
 
 const promisifyApi = (o) => {
