@@ -32,8 +32,9 @@
     "utp-native": "^2.1.3"
   },
   "devDependencies": {
+    "@hyperswarm/dht": "0.0.1",
     "events.once": "^2.0.2",
     "standard": "^12.0.1",
-    "tap": "^12.6.3"
+    "tap": "^12.6.6"
   }
 }

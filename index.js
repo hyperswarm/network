@@ -3,7 +3,7 @@ const net = require('net')
 const Nanoresource = require('nanoresource')
 const discovery = require('@hyperswarm/discovery')
 
-module.exports = (opts, handlers) => new NetworkResource(opts, handlers)
+module.exports = (opts) => new NetworkResource(opts)
 
 class NetworkResource extends Nanoresource {
   constructor (opts) {
@@ -19,6 +19,7 @@ class NetworkResource extends Nanoresource {
     this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
+    this._bootstrap = opts.bootstrap
 
     this.utp.on('connection', this._onincoming.bind(this, false))
     this.tcp.on('connection', this._onincoming.bind(this, true))
@@ -54,13 +55,11 @@ class NetworkResource extends Nanoresource {
         if (!--closes) return cb(new Error('Could not connect'))
         return
       }
-
       self.discovery.holepunch(peer, onholepunch)
     }
 
     function onholepunch (err) {
       if (connected) return
-
       if (err) {
         if (!--closes) return cb(err)
         return
@@ -126,7 +125,10 @@ class NetworkResource extends Nanoresource {
     }
 
     function onlisten () {
-      self.discovery = discovery({ socket: self.utp })
+      self.discovery = discovery({
+        bootstrap: self._bootstrap,
+        socket: self.utp
+      })
       self._onbind()
       cb(null)
     }

@@ -1,10 +1,12 @@
 'use strict'
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
-const { Socket } = require('net')
+const net = require('net')
+const dgram = require('dgram')
 const UTP = require('utp-native')
 const once = require('events.once')
-const { test, only } = require('tap')
+const { test } = require('tap')
+const dht = require('@hyperswarm/dht')
 const guts = require('..')
 
 const promisifyApi = (o) => {
@@ -23,51 +25,78 @@ const promisifyApi = (o) => {
   }
 }
 
-function validSocket (s) {
-  if (!s) return false
-  return (s instanceof Socket) || (s._utp && s._utp instanceof UTP)
+const when = () => {
+  var done = () => { throw Error('did not happen') }
+  const fn = () => done()
+  fn.done = promisify((cb) => { done = cb })
+  return fn
 }
 
-test('socket recieved – socket option – (address details based connection)', async ({is, plan}) => {
-  // there is an unfixed stateful bug which makes
-  // this test non-atomic causing the socket method to never be called. 
-  // Temporary workaround is to place this test first – TODO: move rest to above 
-  // other socket recieved test
-  // NOTE: it may be utp-native, as even stripping all modules except utp-native 
-  // out of the require cache to get a fresh state fails. We can't strip utp-native
-  // from the require cache, it leads to an error (probably to do with Node expecations
-  // around native bindings, error is Module did not self register)
+function validSocket (s) {
+  if (!s) return false
+  return (s instanceof net.Socket) || (s._utp && s._utp instanceof UTP)
+}
+
+async function dhtBootstrap () {
+  const node = dht()
+  await once(node, 'listening')
+  const { port } = node.address()
+  return {
+    port,
+    bootstrap: [`127.0.0.1:${port}`],
+    closeDht: () => node.destroy()
+  }
+}
+
+test('network bound – bind option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({
-    socket(sock) {
-      is(validSocket(sock), true)
+    bind () { pass('method called') }
+  }))
+  await network.bind()
+  await network.close()
+})
+
+test('custom dht – bootstrap option', async ({ is, pass }) => {
+  const { bootstrap, closeDht, port } = await dhtBootstrap()
+  const network = promisifyApi(guts({
+    bootstrap,
+    bind () {
+      pass('bind method triggered')
     }
   }))
   await network.bind()
-  const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  await client.connect({ port, host })
+  is(network.discovery.dht.bootstrapNodes.length, 1)
+  is(network.discovery.dht.bootstrapNodes[0].port, port)
   await network.close()
-  await client.close()
+  closeDht()
 })
 
-
-test('network bound – bind option', async ({pass, plan}) => {
+test('network closed – close option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({
-    bind() { pass('method called') }
+    close () { pass('method called') }
   }))
   await network.bind()
   await network.close()
 })
-test('network closed – close option', async ({pass, plan}) => {
-  plan(1)
-  const network = promisifyApi(guts({
-    close() { pass('method called') }
-  }))
-  await network.bind()
-  await network.close()
+
+test('announce before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.announce(topic), Error('Bind before announcing'))
+})
+
+test('lookupOne before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.lookupOne(topic), Error('Bind before doing a lookup'))
+})
+
+test('lookup before bind will throw', async ({ throws }) => {
+  const network = guts()
+  const topic = randomBytes(32)
+  throws(() => network.lookup(topic), Error('Bind before doing a lookup'))
 })
 
 test('connect two peers with address details', async ({ is, pass }) => {
@@ -77,58 +106,88 @@ test('connect two peers with address details', async ({ is, pass }) => {
   const { port } = network.address()
   const host = '127.0.0.1'
   const socket = await client.connect({ port, host })
-  is(socket instanceof Socket, true, 'got client socket')
+  is(validSocket(socket), true, 'got client socket')
   await client.close()
   pass('client closed')
   await network.close()
   pass('network closed')
 })
 
-test('connect two peers with via lookup', async ({ is, pass }) => {
-  const network = promisifyApi(guts())
+test('connect two peers via lookup', async ({ is, pass }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
   await network.bind()
-  const client = promisifyApi(guts())
+  const client = promisifyApi(guts({ bootstrap }))
   const topic = randomBytes(32)
   await once(network.announce(topic), 'update')
   await client.bind()
   const peer = await client.lookupOne(topic)
   const socket = await client.connect(peer)
-  is(socket instanceof Socket, true, 'got client socket')
+  is(validSocket(socket), true, 'got client socket')
   await client.close()
   pass('client closed')
   await network.close()
   pass('network closed')
+  closeDht()
 })
 
-test('socket recieved – socket option – (lookup based connection)', async ({is, plan}) => {
-  plan(1)
+test('socket recieved – socket option – (address details based connection)', async ({ is }) => {
+  const until = when()
   const network = promisifyApi(guts({
-    socket(sock) {
+    async socket (sock) {
       is(validSocket(sock), true)
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
   const client = promisifyApi(guts())
+  const { port } = network.address()
+  const host = '127.0.0.1'
+  await client.connect({ port, host })
+  await until.done()
+})
+
+test('socket recieved – socket option – (lookup based connection)', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const until = when()
+  const network = promisifyApi(guts({
+    bootstrap,
+    async socket (sock) {
+      is(validSocket(sock), true)
+      await network.close()
+      await client.close()
+      until()
+    }
+  }))
+  await network.bind()
+  const client = promisifyApi(guts({ bootstrap }))
   const topic = randomBytes(32)
   const sub = network.announce(topic)
   await once(sub, 'update')
   await client.bind()
   const peer = await client.lookupOne(topic)
   await client.connect(peer)
-  await network.close()
-  await client.close()
+  await until.done()
+  closeDht()
 })
 
-test('send data to network peer', async ({ is, plan }) => {
-  plan(1)
+test('send data to network peer', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const until = when()
   const network = promisifyApi(guts({
+    bootstrap,
     async socket (sock) {
       const [ data ] = await once(sock, 'data')
       is(data.toString(), 'test')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
-  const client = promisifyApi(guts())
+  const client = promisifyApi(guts({ bootstrap }))
   const topic = randomBytes(32)
   const sub = network.announce(topic)
   await once(sub, 'update')
@@ -136,18 +195,24 @@ test('send data to network peer', async ({ is, plan }) => {
   const peer = await client.lookupOne(topic)
   const socket = await client.connect(peer)
   socket.write('test')
-  await network.close()
-  await client.close()
+  await until.done()
+  closeDht()
 })
 
 test('send data to client peer', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const until = when()
   const network = promisifyApi(guts({
-    socket (socket) {
+    bootstrap,
+    async socket (socket) {
       socket.write('test')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
-  const client = promisifyApi(guts())
+  const client = promisifyApi(guts({ bootstrap }))
   const topic = randomBytes(32)
   const sub = network.announce(topic)
   await once(sub, 'update')
@@ -156,21 +221,26 @@ test('send data to client peer', async ({ is }) => {
   const socket = await client.connect(peer)
   const [ data ] = await once(socket, 'data')
   is(data.toString(), 'test')
-  await network.close()
-  await client.close()
+  await until.done()
+  closeDht()
 })
 
-test('send data bidrectionally between network and client', async ({ is, plan }) => {
-  plan(2)
+test('send data bidirectionally between network and client', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const until = when()
   const network = promisifyApi(guts({
+    bootstrap,
     async socket (socket) {
       const [ data ] = await once(socket, 'data')
       is(data.toString(), 'from client')
       socket.write('from network')
+      await network.close()
+      await client.close()
+      until()
     }
   }))
   await network.bind()
-  const client = promisifyApi(guts())
+  const client = promisifyApi(guts({ bootstrap }))
   const topic = randomBytes(32)
   const sub = network.announce(topic)
   await once(sub, 'update')
@@ -180,59 +250,166 @@ test('send data bidrectionally between network and client', async ({ is, plan })
   socket.write('from client')
   const [ data ] = await once(socket, 'data')
   is(data.toString(), 'from network')
-  await network.close()
-  await client.close()
+  await until.done()
+  closeDht()
 })
 
-test('two networks, connect and close', async ({ ok, pass }) => {
-  const network = promisifyApi(guts({
-    socket (sock) { ok(sock, 'got server socket') }
-  }))
+test('referrer node (peer info from DHT)', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
   await network.bind()
-  const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  const socket = await client.connect({ port, host })
-  ok(socket, 'got client socket')
-  await client.close()
-  pass('client closed')
+  const client = promisifyApi(guts({ bootstrap }))
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  const connecting = client.connect({
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: {
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
+  const [ msg ] = await once(referrer, 'message')
+  is(/_holepunch/.test(msg), true, 'triggers a holepunch command to referrer node')
+  // not strictly necessary, since we would never get msg
+  // if client was connected, however for explicitness sake:
+  await connecting
   await network.close()
-  pass('network closed')
+  await client.close()
+  await promisify(referrer.close.bind(referrer))()
+  closeDht()
 })
 
-test('referrer node (remote peer)', async ({ ok, pass }) => {
-  const network = promisifyApi(guts({
-    socket (sock) { ok(sock, 'got server socket') }
-  }))
+test('binds when connecting to peer with referrer node', async ({ pass }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
   await network.bind()
-  const client = promisifyApi(guts())
-  const { port } = network.address()
-  const host = '127.0.0.1'
-  const socket = await client.connect({ port, host })
-  ok(socket, 'got client socket')
-  await client.close()
-  pass('client closed')
+  const client = promisifyApi(guts({
+    bootstrap,
+    bind () {
+      pass('client bound after connect')
+    }
+  }))
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  await client.connect({
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: {
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
   await network.close()
-  pass('network closed')
+  await client.close()
+  await promisify(referrer.close.bind(referrer))()
+  closeDht()
 })
 
+test('retries after binding error when attempting to connect to peer with referrer', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
+  await network.bind()
+  const client = promisifyApi(guts({ bootstrap }))
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  // create an error scenario:
+  var count = 0
+  client.tcp.listen = async (port) => {
+    count++
+    client.tcp.emit('error', Error('test'))
+  }
+  await client.connect({
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: {
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
+  is(count, 4)
+  await client.close()
+  await network.close()
+  await promisify(referrer.close.bind(referrer))()
+  closeDht()
+})
 
-// enable this test when bug is fixed/to fix bug, see first test
-// test('bug-fix – statefulness issue: ensure socket method option is called on a instance that is bind after prior instance is bound and closed', async ({is, plan}) => {
-//   const x = promisifyApi(guts())
-//   await x.bind()
-//   await x.close()
-//   plan(1)
-//   const network = promisifyApi(guts({
-//     socket(sock) {
-//       is(validSocket(sock), true)
-//     }
-//   }))
-//   await network.bind()
-//   const client = promisifyApi(guts())
-//   const { port } = network.address()
-//   const host = '127.0.0.1'
-//   await client.connect({ port, host })
-//   await network.close()
-//   await client.close()
-// })
+test('"Could not connect" error when peer connection closes after retries start but before retry count is reached', async ({ rejects }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
+  await network.bind()
+  const client = promisifyApi(guts({ bootstrap }))
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  // create an error scenario:
+  var count = 0
+  client.tcp.listen = async (port) => {
+    count++
+    if (count === 4) {
+      await network.close() // create a closes === 0 situation
+    }
+    client.tcp.emit('error', Error('test'))
+  }
+  const connecting = client.connect({
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: {
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
+  await rejects(() => connecting, Error('Could not connect'))
+  await client.close()
+  await promisify(referrer.close.bind(referrer))()
+  closeDht()
+})
+
+test('"All sockets failed" error when peer connection closes *after* bind retry count is reached', async ({ rejects }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const network = promisifyApi(guts({ bootstrap }))
+  await network.bind()
+  const client = promisifyApi(guts({ bootstrap }))
+  const referrer = dgram.createSocket('udp4')
+  await promisify(referrer.bind.bind(referrer))()
+  // create an error scenario:
+  client.tcp.listen = async (port) => {
+    client.tcp.emit('error', Error('test'))
+  }
+  const connecting = client.connect({
+    host: '127.0.0.1',
+    port: network.address().port,
+    referrer: {
+      host: '127.0.0.1',
+      port: referrer.address().port
+    }
+  })
+  network.close()
+  await rejects(() => connecting, Error('All sockets failed'))
+  await client.close()
+  await promisify(referrer.close.bind(referrer))()
+  closeDht()
+})
+
+test('attempt to connect to closed peer', async ({ rejects }) => {
+  const network = promisifyApi(guts())
+  await network.bind()
+  const { port } = network.address()
+  await network.close()
+  const client = promisifyApi(guts())
+  await client.bind()
+  const host = '127.0.0.1'
+  await rejects(client.connect({ port, host }), Error('All sockets failed'))
+  await client.close()
+})
+
+test('attempt to connect from closed peer', async ({ rejects }) => {
+  const network = promisifyApi(guts())
+  await network.bind()
+  const { port } = network.address()
+  const client = promisifyApi(guts())
+  await client.bind()
+  await client.close()
+  const host = '127.0.0.1'
+  await rejects(client.connect({ port, host }), Error('All sockets failed'))
+  await network.close()
+})
