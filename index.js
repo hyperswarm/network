@@ -19,6 +19,7 @@ class NetworkResource extends Nanoresource {
     this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
+    this._bootstrap = opts.bootstrap
 
     this.utp.on('connection', this._onincoming.bind(this, false))
     this.tcp.on('connection', this._onincoming.bind(this, true))
@@ -124,7 +125,10 @@ class NetworkResource extends Nanoresource {
     }
 
     function onlisten () {
-      self.discovery = discovery({ socket: self.utp })
+      self.discovery = discovery({
+        bootstrap: self._bootstrap,
+        socket: self.utp
+      })
       self._onbind()
       cb(null)
     }

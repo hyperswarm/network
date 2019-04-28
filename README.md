@@ -43,7 +43,9 @@ Options include:
   },
   socket (socket) {
     // called when an incoming socket is received
-  }
+  },
+  // Optionally overwrite the default set of bootstrap servers
+  bootstrap: [addresses]
 }
 ```
 
