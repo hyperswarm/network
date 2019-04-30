@@ -1,3 +1,4 @@
+'use strict'
 const utp = require('utp-native')
 const net = require('net')
 const Nanoresource = require('nanoresource')
@@ -46,7 +47,6 @@ class NetworkResource extends Nanoresource {
     tcp.on('close', onclose)
 
     if (!peer.referrer) return
-
     closes++
     this.open(onopen)
 
@@ -74,7 +74,6 @@ class NetworkResource extends Nanoresource {
 
     function onconnect () {
       const socket = this
-
       if (self.closed || connected) return socket.destroy()
 
       connected = true
@@ -101,7 +100,7 @@ class NetworkResource extends Nanoresource {
 
   lookup (key, cb) {
     if (!this.discovery) throw new Error('Bind before doing a lookup')
-    this.discovery.lookup(key, cb)
+    return this.discovery.lookup(key)
   }
 
   bind (preferredPort, cb) {
@@ -146,7 +145,6 @@ class NetworkResource extends Nanoresource {
 
     function ondiscoveryclose () {
       let missing = 2
-
       for (const socket of self.sockets) socket.destroy()
       self.sockets.clear()
 
@@ -172,7 +170,7 @@ function listenBoth (tcp, utp, port, cb) {
 
     listen(utp, tcp.address().port, function (err) {
       if (err) {
-        tcp.once('close', cb)
+        tcp.once('close', () => cb(err))
         tcp.close()
         return
       }

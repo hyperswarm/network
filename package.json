@@ -4,8 +4,8 @@
   "description": "The networking guts of Hyperswarm",
   "main": "index.js",
   "scripts": {
-    "test": "tap test/*.js && standard --fix",
-    "cov": "tap --100 test/*.js"
+    "test": "tap -T test/*.js && standard --fix",
+    "cov": "tap -T --100 test/*.js"
   },
   "repository": {
     "type": "git",
@@ -34,6 +34,7 @@
   "devDependencies": {
     "@hyperswarm/dht": "0.0.1",
     "events.once": "^2.0.2",
+    "get-port": "^5.0.0",
     "standard": "^12.0.1",
     "tap": "^12.6.6"
   }
