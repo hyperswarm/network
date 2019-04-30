@@ -585,7 +585,6 @@ test('temporary tcp connection outage prior holepunch from bind due to referrer'
   // results in a utp connection instead of tcp
   const { bootstrap, closeDht } = await dhtBootstrap()
   const network = promisifyApi(guts({ bootstrap }))
-  network.name = 'network'
   await network.bind()
   const { port } = network.address()
   const client = promisifyApi(guts({
@@ -602,7 +601,6 @@ test('temporary tcp connection outage prior holepunch from bind due to referrer'
     },
     bootstrap
   }))
-  client.name = 'client'
   const referrer = dgram.createSocket('udp4')
   await promisify(referrer.bind.bind(referrer))()
   const connecting = client.connect({
