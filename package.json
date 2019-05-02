@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "tap -T test/*.js && standard --fix",
-    "cov": "tap -T --100 test/*.js"
+    "cov": "tap -T --100 test/*.js",
+    "ci": "standard && npm run cov"
   },
   "repository": {
     "type": "git",
