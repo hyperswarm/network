@@ -1,58 +1,19 @@
 'use strict'
 const { randomBytes } = require('crypto')
 const { promisify } = require('util')
+const {
+  promisifyApi,
+  compatifyTcp,
+  when,
+  validSocket,
+  dhtBootstrap
+} = require('./util')
 const net = require('net')
 const dgram = require('dgram')
-const UTP = require('utp-native')
 const once = require('events.once')
 const getPort = require('get-port')
 const { test } = require('tap')
-const dht = require('@hyperswarm/dht')
 const guts = require('..')
-
-const promisifyApi = (o) => {
-  var kCustomPromisifyArgsSymbol = null
-  promisify(new Proxy(() => {}, { get (_, p) {
-    if (/PromisifyArgs/.test(p.toString())) {
-      kCustomPromisifyArgsSymbol = p
-    }
-  } }))
-  o.connect[kCustomPromisifyArgsSymbol] = ['socket', 'isTcp']
-  const connect = promisify(o.connect)
-  const lookupOne = promisify(o.lookupOne)
-  const bind = promisify(o.bind)
-  const close = promisify(o.close)
-  return {
-    __proto__: o,
-    connect,
-    lookupOne,
-    bind,
-    close
-  }
-}
-
-const when = () => {
-  var done = () => { throw Error('did not happen') }
-  const fn = () => done()
-  fn.done = promisify((cb) => { done = cb })
-  return fn
-}
-
-function validSocket (s) {
-  if (!s) return false
-  return (s instanceof net.Socket) || (s._utp && s._utp instanceof UTP)
-}
-
-async function dhtBootstrap () {
-  const node = dht()
-  await once(node, 'listening')
-  const { port } = node.address()
-  return {
-    port,
-    bootstrap: [`127.0.0.1:${port}`],
-    closeDht: () => node.destroy()
-  }
-}
 
 test('network bound – bind option', async ({ pass, plan }) => {
   plan(1)
@@ -435,25 +396,30 @@ test('retries after binding error when attempting to connect to peer with referr
 })
 
 test('tcp socket connection timeout prior to holepunch from bind due to referrer', async ({ rejects }) => {
-  const { bootstrap, closeDht } = await dhtBootstrap()
-  const network = promisifyApi(guts({ bootstrap }))
-  await network.bind()
-  const client = promisifyApi(guts({ bootstrap }))
-  const referrer = dgram.createSocket('udp4')
-  await promisify(referrer.bind.bind(referrer))()
-  const connecting = client.connect({
-    host: '127.0.0.1',
-    port: network.address().port,
-    referrer: {
+  compatifyTcp.on()
+  try {
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const network = promisifyApi(guts({ bootstrap }))
+    await network.bind()
+    const client = promisifyApi(guts({ bootstrap }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    const connecting = client.connect({
       host: '127.0.0.1',
-      port: referrer.address().port
-    }
-  })
-  await network.close()
-  await rejects(async () => connecting, Error('Request timed out'))
-  await client.close()
-  await promisify(referrer.close.bind(referrer))()
-  closeDht()
+      port: network.address().port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    await network.close()
+    await rejects(async () => connecting, Error('Request timed out'))
+    await client.close()
+    await promisify(referrer.close.bind(referrer))()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
 })
 
 test('holepunch attempt resulting from referrer node fails before tcp connection is estabilished but after successful bind', async ({ resolves }) => {
@@ -493,68 +459,79 @@ test('holepunch attempt resulting from referrer node fails before tcp connection
 })
 
 test('"Could not connect" error when peer connection closes after retries start but before retry count is reached', async ({ rejects }) => {
-  const { bootstrap, closeDht } = await dhtBootstrap()
-  const network = promisifyApi(guts({ bootstrap }))
-  await network.bind()
-  const client = promisifyApi(guts({ bootstrap }))
-  const referrer = dgram.createSocket('udp4')
-  await promisify(referrer.bind.bind(referrer))()
-  // create an error scenario:
-  var count = 0
-  client.tcp.listen = async (port) => {
-    count++
-    if (count === 4) {
-      await network.close() // create a closes === 0 situation
-    }
-    client.tcp.emit('error', Error('test'))
-  }
-  const connecting = client.connect({
-    bind () {
-      // guard against any possibility of holepunching
-      // leading to utp connection which could lead to
-      // unwanted modification of the `closes` counter
-      const { holepunch } = client.discovery
-      client.discovery.holepunch = () => {
-        client.discovery.holepunch = holepunch
+  compatifyTcp.on()
+  try {
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const network = promisifyApi(guts({ bootstrap }))
+    await network.bind()
+    const client = promisifyApi(guts({ bootstrap }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    // create an error scenario:
+    var count = 0
+    client.tcp.listen = async (port) => {
+      count++
+      if (count === 4) {
+        compatifyTcp.emitSocketClose()
+        await network.close() // create a closes === 0 situation
       }
-    },
-    host: '127.0.0.1',
-    port: network.address().port,
-    referrer: {
-      host: '127.0.0.1',
-      port: referrer.address().port
+      client.tcp.emit('error', Error('test'))
     }
-  })
-  await rejects(() => connecting, Error('Could not connect'))
-  await client.close()
-  await promisify(referrer.close.bind(referrer))()
-  closeDht()
+    const connecting = client.connect({
+      bind () {
+        // guard against any possibility of holepunching
+        // leading to utp connection which could lead to
+        // unwanted modification of the `closes` counter
+        const { holepunch } = client.discovery
+        client.discovery.holepunch = () => {
+          client.discovery.holepunch = holepunch
+        }
+      },
+      host: '127.0.0.1',
+      port: network.address().port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    await rejects(() => connecting, Error('Could not connect'))
+    await client.close()
+    await promisify(referrer.close.bind(referrer))()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
 })
 
 test('"All sockets failed" error when peer connection closes *after* bind retry count is reached', async ({ rejects }) => {
-  const { bootstrap, closeDht } = await dhtBootstrap()
-  const network = promisifyApi(guts({ bootstrap }))
-  await network.bind()
-  const client = promisifyApi(guts({ bootstrap }))
-  const referrer = dgram.createSocket('udp4')
-  await promisify(referrer.bind.bind(referrer))()
-  // create an error scenario:
-  client.tcp.listen = async (port) => {
-    client.tcp.emit('error', Error('test'))
-  }
-  const connecting = client.connect({
-    host: '127.0.0.1',
-    port: network.address().port,
-    referrer: {
-      host: '127.0.0.1',
-      port: referrer.address().port
+  compatifyTcp.on()
+  try {
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const network = promisifyApi(guts({ bootstrap }))
+    await network.bind()
+    const client = promisifyApi(guts({ bootstrap }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    // create an error scenario:
+    client.tcp.listen = async (port) => {
+      client.tcp.emit('error', Error('test'))
     }
-  })
-  network.close()
-  await rejects(() => connecting, Error('All sockets failed'))
-  await client.close()
-  await promisify(referrer.close.bind(referrer))()
-  closeDht()
+    const connecting = client.connect({
+      host: '127.0.0.1',
+      port: network.address().port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    network.close()
+    await rejects(() => connecting, Error('All sockets failed'))
+    await client.close()
+    await promisify(referrer.close.bind(referrer))()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
 })
 
 test('attempt to connect to closed peer', async ({ rejects }) => {
@@ -582,47 +559,52 @@ test('attempt to connect from closed peer', async ({ rejects }) => {
 })
 
 test('temporary tcp connection outage prior holepunch from bind due to referrer', async ({ is }) => {
-  // results in a utp connection instead of tcp
-  const { bootstrap, closeDht } = await dhtBootstrap()
-  const network = promisifyApi(guts({ bootstrap }))
-  await network.bind()
-  const { port } = network.address()
-  const client = promisifyApi(guts({
-    bind () {
-      // fake holepunch completion before connected
-      const { holepunch } = client.discovery
-      client.discovery.holepunch = async (peer, cb) => {
-        client.discovery.holepunch = holepunch
-        network.tcp = net.createServer().listen(port)
-        await once(network.tcp, 'listening')
-        network.tcp.unref()
-        cb()
-      }
-    },
-    bootstrap
-  }))
-  const referrer = dgram.createSocket('udp4')
-  await promisify(referrer.bind.bind(referrer))()
-  const connecting = client.connect({
-    host: '127.0.0.1',
-    port: port,
-    referrer: {
+  compatifyTcp.on()
+  try {
+    // results in a utp connection instead of tcp
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const network = promisifyApi(guts({ bootstrap }))
+    await network.bind()
+    const { port } = network.address()
+    const client = promisifyApi(guts({
+      bind () {
+        // fake holepunch completion before connected
+        const { holepunch } = client.discovery
+        client.discovery.holepunch = async (peer, cb) => {
+          client.discovery.holepunch = holepunch
+          network.tcp = net.createServer().listen(port)
+          await once(network.tcp, 'listening')
+          network.tcp.unref()
+          cb()
+        }
+      },
+      bootstrap
+    }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    const connecting = client.connect({
       host: '127.0.0.1',
-      port: referrer.address().port
-    }
-  })
-  // simulate network failure
-  const { tcp } = network
-  tcp.close()
-  await once(tcp, 'close')
-  const { isTcp } = await connecting
-  is(isTcp, false, 'UDP socket')
-  await network.close()
-  await promisify(referrer.close.bind(referrer))()
-  // this scenario causes client peer's utp instance
-  // to become unclosable, unref in order to allow
-  // process to exit
-  client.utp.unref()
-  client.close()
-  closeDht()
+      port: port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    // simulate network failure
+    const { tcp } = network
+    tcp.close()
+    await once(tcp, 'close')
+    const { isTcp } = await connecting
+    is(isTcp, false, 'UDP socket')
+    await network.close()
+    await promisify(referrer.close.bind(referrer))()
+    // this scenario causes client peer's utp instance
+    // to become unclosable, unref in order to allow
+    // process to exit
+    client.utp.unref()
+    client.close()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
 })
