@@ -39,6 +39,31 @@ test('custom dht – bootstrap option', async ({ is, pass }) => {
   closeDht()
 })
 
+test('setting ephemerality – ephemeral option', async ({ is, pass }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const defaultEphemerality = promisifyApi(guts({
+    bootstrap
+  }))
+  await defaultEphemerality.bind()
+  is(defaultEphemerality.discovery.dht.ephemeral, true)
+  await defaultEphemerality.close()
+  const explicitlyEphemeral = promisifyApi(guts({
+    ephemeral: true,
+    bootstrap
+  }))
+  await explicitlyEphemeral.bind()
+  is(explicitlyEphemeral.discovery.dht.ephemeral, true)
+  await explicitlyEphemeral.close()
+  const nonEphemeral = promisifyApi(guts({
+    ephemeral: false,
+    bootstrap
+  }))
+  await nonEphemeral.bind()
+  is(nonEphemeral.discovery.dht.ephemeral, false)
+  await nonEphemeral.close()
+  closeDht()
+})
+
 test('network closed – close option', async ({ pass, plan }) => {
   plan(1)
   const network = promisifyApi(guts({

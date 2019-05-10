@@ -45,7 +45,11 @@ Options include:
     // called when an incoming socket is received
   },
   // Optionally overwrite the default set of bootstrap servers
-  bootstrap: [addresses]
+  bootstrap: [addresses],
+  // Set to false if this is a long running instance on a server
+  // When running in ephemeral mode (default) you don't join the
+  // DHT but just query it instead.
+  ephemeral: true
 }
 ```
 
