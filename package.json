@@ -4,8 +4,8 @@
   "description": "The networking guts of Hyperswarm",
   "main": "index.js",
   "scripts": {
-    "test": "tap -T test/*.js && standard --fix",
-    "cov": "tap -T --100 test/*.js",
+    "test": "tap -T test/*.test.js && standard --fix",
+    "cov": "tap -T --100 test/*.test.js",
     "ci": "standard && npm run cov"
   },
   "repository": {
