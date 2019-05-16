@@ -5,7 +5,6 @@ const Nanoresource = require('nanoresource')
 const discovery = require('@hyperswarm/discovery')
 
 module.exports = (opts) => new NetworkResource(opts)
-
 class NetworkResource extends Nanoresource {
   constructor (opts) {
     if (!opts) opts = {}
@@ -88,10 +87,10 @@ class NetworkResource extends Nanoresource {
     }
   }
 
-  announce (key) {
+  announce (key, { lookup = false } = {}) {
     if (!this.discovery) throw new Error('Bind before announcing')
     const localPort = this.tcp.address().port
-    return this.discovery.announce(key, { localPort })
+    return this.discovery.announce(key, { port: 0, localPort, lookup })
   }
 
   lookupOne (key, cb) {
@@ -99,7 +98,7 @@ class NetworkResource extends Nanoresource {
     this.discovery.lookupOne(key, cb)
   }
 
-  lookup (key, cb) {
+  lookup (key) {
     if (!this.discovery) throw new Error('Bind before doing a lookup')
     return this.discovery.lookup(key)
   }
