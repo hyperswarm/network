@@ -217,6 +217,32 @@ test('connect two peers via lookupOne', async ({ is, pass }) => {
   closeDht()
 })
 
+test('announce with lookup option emits peers that announce on a topic', async ({ is }) => {
+  const { bootstrap, closeDht } = await dhtBootstrap()
+  const p1 = promisifyApi(guts({ bootstrap }))
+  await p1.bind()
+  const p2 = promisifyApi(guts({ bootstrap }))
+  await p2.bind()
+  const client = promisifyApi(guts({ bootstrap }))
+  const topic = randomBytes(32)
+  await client.bind()
+  const lookup = client.announce(topic, { lookup: true })
+  p1.announce(topic)
+  p2.announce(topic)
+  const [ r1 ] = await once(lookup, 'peer')
+  is(r1.port, p1.address().port)
+  is(r1.local, true)
+  is(r1.topic, topic)
+  const [ r2 ] = await once(lookup, 'peer')
+  is(r2.port, p2.address().port)
+  is(r2.local, true)
+  is(r2.topic, topic)
+  await p1.close()
+  await p2.close()
+  await client.close()
+  closeDht()
+})
+
 test('socket recieved – socket option – (address details based connection)', async ({ is }) => {
   const until = when()
   const network = promisifyApi(guts({
