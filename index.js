@@ -5,6 +5,7 @@ const Nanoresource = require('nanoresource')
 const discovery = require('@hyperswarm/discovery')
 
 module.exports = (opts) => new NetworkResource(opts)
+
 class NetworkResource extends Nanoresource {
   constructor (opts) {
     if (!opts) opts = {}
@@ -194,3 +195,5 @@ function listen (server, port, cb) {
 }
 
 function noop () {}
+
+module.exports.NetworkResource = NetworkResource
