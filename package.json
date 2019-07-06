@@ -1,22 +1,22 @@
 {
-  "name": "@hyperswarm/guts",
+  "name": "@hyperswarm/network",
   "version": "1.0.0",
   "description": "The networking guts of Hyperswarm",
   "main": "index.js",
   "scripts": {
     "test": "tap -T test/*.test.js && standard --fix",
-    "cov": "tap -T --100 test/*.test.js",
+    "cov": "tap -T --100 --coverage-report=html test/*.test.js",
     "ci": "standard && npm run cov"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hyperswarm/guts.git"
+    "url": "git+https://github.com/hyperswarm/network.git"
   },
   "keywords": [
     "hyperswarm",
     "networking",
     "p2p",
-    "guts"
+    "network"
   ],
   "author": "Mathias Buus (@mafintosh)",
   "contributors": [
@@ -24,9 +24,9 @@
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/hyperswarm/guts/issues"
+    "url": "https://github.com/hyperswarm/network/issues"
   },
-  "homepage": "https://github.com/hyperswarm/guts#readme",
+  "homepage": "https://github.com/hyperswarm/network#readme",
   "dependencies": {
     "@hyperswarm/discovery": "^1.2.0",
     "nanoresource": "^1.0.0",

@@ -16,7 +16,6 @@ class NetworkResource extends Nanoresource {
     this.discovery = null
     this.options = opts
     this.sockets = new Set()
-
     this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
@@ -42,11 +41,9 @@ class NetworkResource extends Nanoresource {
     const tcp = net.connect(peer.port, peer.host)
     let connected = false
     let closes = 1
-
     tcp.on('error', tcp.destroy)
     tcp.on('connect', onconnect)
     tcp.on('close', onclose)
-
     if (!peer.referrer) return
     closes++
     this.open(onopen)

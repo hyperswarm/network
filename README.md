@@ -1,23 +1,23 @@
-# @hyperswarm/guts
+# @hyperswarm/networking
 
-The low level networking guts of the Hyperswarm stack as a separate module
+The low level networking guts of the Hyperswarm stack.
 
 ```
-npm install @hyperswarm/guts
+npm install @hyperswarm/network
 ```
 
 ## Usage
 
 ``` js
-const guts = require('@hyperswarm/guts')
+const network = require('@hyperswarm/network')()
 
-const network = guts()
+const nw = network()
 
-network.bind(function () {
+nw.bind(function () {
   // topic should be a 32 byte buffer
-  network.lookupOne(topic, function (err, peer) {
+  nw.lookupOne(topic, function (err, peer) {
     if (err) throw err
-    network.connect(peer, function (err, socket) {
+    nw.connect(peer, function (err, socket) {
       if (err) throw err
       socket.write('Hello World!')
     })
@@ -27,9 +27,9 @@ network.bind(function () {
 
 ## API
 
-#### `network = guts([options])`
+#### `net = network([options])`
 
-Create a new guts instance.
+Create a new network instance.
 
 Options include:
 
@@ -53,34 +53,34 @@ Options include:
 }
 ```
 
-#### `network.bind([preferredPort], [callback])`
+#### `nw.bind([preferredPort], [callback])`
 
 Bind to a preferred port. Must be called before connecting.
 
 Safe to call multiple times. If already bound or binding it will call
 the callback when fully bound.
 
-#### `network.close([callback])`
+#### `nw.close([callback])`
 
 Fully close the network.
 
 Safe to call multiple times.
 
-#### `network.connect(peer, callback)`
+#### `nw.connect(peer, callback)`
 
 Connect to a peer. Will do UDP holepunching.
 
 Callback is called with `(err, socket, isTCP)`. If the underlying socket is a TCP socket `isTCP` will be true, if it is a UTP socket it will be false.
 
-#### `announcer = network.announce(topic)`
+#### `announcer = nw.announce(topic)`
 
 Start announcing the network on the Hyperswarm discovery network.
 
-#### `lookup = network.lookup(topic)`
+#### `lookup = nw.lookup(topic)`
 
 Start doing a lookup on the Hyperswarm discovery network.
 
-#### `network.lookupOne(topic, callback)`
+#### `nw.lookupOne(topic, callback)`
 
 Lookup a single peer on the Hyperswarm discovery network.
 
