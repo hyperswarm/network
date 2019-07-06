@@ -1,4 +1,4 @@
-# @hyperswarm/networking
+# @hyperswarm/network
 
 The low level networking guts of the Hyperswarm stack.
 
