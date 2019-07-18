@@ -4,6 +4,8 @@ const net = require('net')
 const Nanoresource = require('nanoresource')
 const discovery = require('@hyperswarm/discovery')
 
+const CONNECTION_TIMEOUT = 10000 // TODO: make configurable
+
 module.exports = (opts) => new NetworkResource(opts)
 
 class NetworkResource extends Nanoresource {
@@ -39,7 +41,10 @@ class NetworkResource extends Nanoresource {
   connect (peer, cb) {
     const self = this
     const tcp = net.connect(peer.port, peer.host)
+    const timeout = setTimeout(ontimeout, CONNECTION_TIMEOUT)
+    let timedout = false
     let connected = false
+    let active = [tcp]
     let closes = 1
     tcp.on('error', tcp.destroy)
     tcp.on('connect', onconnect)
@@ -56,8 +61,14 @@ class NetworkResource extends Nanoresource {
       self.discovery.holepunch(peer, onholepunch)
     }
 
+    function ontimeout () {
+      timedout = true
+      for (const socket of active) socket.destroy()
+      cb(new Error('Timeout'))
+    }
+
     function onholepunch (err) {
-      if (connected) return
+      if (connected || timedout) return
       if (err) {
         if (!--closes) return cb(err)
         return
@@ -68,12 +79,14 @@ class NetworkResource extends Nanoresource {
       utp.on('error', utp.destroy)
       utp.on('connect', onconnect)
       utp.on('close', onclose)
+      active.push(utp)
     }
 
     function onconnect () {
       const socket = this
-      if (self.closed || connected) return socket.destroy()
+      if (self.closed || connected || timedout) return socket.destroy()
 
+      clearTimeout(timeout)
       connected = true
       self.sockets.add(socket)
       cb(null, socket, tcp === socket)
@@ -81,7 +94,10 @@ class NetworkResource extends Nanoresource {
 
     function onclose () {
       self.sockets.delete(this) // only one of the sockets are added but this still works
-      if (!--closes && !connected) cb(new Error('All sockets failed'))
+      if (!--closes && !connected && !timedout) {
+        clearTimeout(timeout)
+        cb(new Error('All sockets failed'))
+      }
     }
   }
 
