@@ -1,6 +1,6 @@
 {
   "name": "@hyperswarm/network",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "The networking guts of Hyperswarm",
   "main": "index.js",
   "scripts": {
