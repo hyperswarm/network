@@ -46,7 +46,7 @@ class NetworkResource extends Nanoresource {
     let connected = false
     let active = [tcp]
     let closes = 1
-    tcp.on('error', tcp.destroy)
+    tcp.on('error', ontcperror)
     tcp.on('connect', onconnect)
     tcp.on('close', onclose)
     if (!peer.referrer) return
@@ -76,7 +76,7 @@ class NetworkResource extends Nanoresource {
 
       const utp = self.utp.connect(peer.port, peer.host)
 
-      utp.on('error', utp.destroy)
+      utp.on('error', onutperror)
       utp.on('connect', onconnect)
       utp.on('close', onclose)
       active.push(utp)
@@ -193,6 +193,14 @@ function listenBoth (tcp, utp, port, cb) {
       cb(null)
     })
   })
+}
+
+function ontcperror (err) {
+  if (this.destroyed === false) this.destroy(err)
+}
+
+function onutperror (err) {
+  if (this.destroyed === false) this.destroy(err)
 }
 
 function listen (server, port, cb) {
