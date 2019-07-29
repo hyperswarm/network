@@ -659,3 +659,173 @@ test('temporary tcp connection outage prior holepunch from bind due to referrer'
     compatifyTcp.off()
   }
 })
+
+test('destroys socket on error (tcp)', async ({ is, pass, plan }) => {
+  plan(4)
+  const nw = promisifyApi(network())
+  await nw.bind()
+  const client = promisifyApi(network())
+  const { port } = nw.address()
+  const host = '127.0.0.1'
+  const { socket } = await client.connect({ port, host })
+  is(validSocket(socket), true, 'got client socket')
+  const testErr = Error('test')
+  const { destroy } = socket
+  socket.destroy = (err) => {
+    is(err, testErr, 'error passed')
+    return destroy.call(socket, err)
+  }
+  socket.emit('error', testErr)
+  await client.close()
+  pass('client closed')
+  await nw.close()
+  pass('network closed')
+})
+
+test('only destroys socket once on error (tcp)', async ({ is, pass, plan, fail }) => {
+  plan(4)
+  const nw = promisifyApi(network())
+  await nw.bind()
+  const client = promisifyApi(network())
+  const { port } = nw.address()
+  const host = '127.0.0.1'
+  const { socket } = await client.connect({ port, host })
+  is(validSocket(socket), true, 'got client socket')
+  const testErr = Error('test')
+  const { destroy } = socket
+  socket.destroy = (err) => {
+    is(err, testErr, 'error passed')
+    socket.destroy = () => fail('destroy called again')
+    return destroy.call(socket, err)
+  }
+  socket.emit('error', testErr)
+  socket.emit('error', testErr)
+  await client.close()
+  pass('client closed')
+  await nw.close()
+  pass('network closed')
+})
+
+test('only destroys socket once on error (utp)', async ({ is, plan, fail }) => {
+  plan(2)
+  compatifyTcp.on()
+  try {
+    // results in a utp connection instead of tcp
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const nw = promisifyApi(network({ bootstrap }))
+    await nw.bind()
+    const { port } = nw.address()
+    const client = promisifyApi(network({
+      bind () {
+        // fake holepunch completion before connected
+        const { holepunch } = client.discovery
+        client.discovery.holepunch = async (peer, cb) => {
+          client.discovery.holepunch = holepunch
+          nw.tcp = createServer().listen(port)
+          await once(nw.tcp, 'listening')
+          nw.tcp.unref()
+          cb()
+        }
+      },
+      bootstrap
+    }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    const connecting = client.connect({
+      host: '127.0.0.1',
+      port: port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    // simulate nw failure
+    const { tcp } = nw
+    tcp.close()
+    await once(tcp, 'close')
+    const { socket, isTcp } = await connecting
+    is(isTcp, false, 'UDP socket')
+    const testErr = Error('test')
+    const { destroy } = socket
+    socket.destroy = (err) => {
+      is(err, testErr, 'error passed')
+      socket.destroy = () => fail('socket destroyed again')
+      return destroy.call(socket, err)
+    }
+    socket.emit('error', testErr)
+    await promisify(setImmediate)
+    socket.emit('error', testErr)
+    await promisify(setImmediate)
+    socket.destroy = destroy
+    await nw.close()
+    await promisify(referrer.close.bind(referrer))()
+    // this scenario causes client peer's utp instance
+    // to become unclosable, unref in order to allow
+    // process to exit
+    client.utp.unref()
+    client.close()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
+})
+
+test('destroys socket on error (utp)', async ({ is, plan }) => {
+  plan(2)
+  compatifyTcp.on()
+  try {
+    // results in a utp connection instead of tcp
+    const { bootstrap, closeDht } = await dhtBootstrap()
+    const nw = promisifyApi(network({ bootstrap }))
+    await nw.bind()
+    const { port } = nw.address()
+    const client = promisifyApi(network({
+      bind () {
+        // fake holepunch completion before connected
+        const { holepunch } = client.discovery
+        client.discovery.holepunch = async (peer, cb) => {
+          client.discovery.holepunch = holepunch
+          nw.tcp = createServer().listen(port)
+          await once(nw.tcp, 'listening')
+          nw.tcp.unref()
+          cb()
+        }
+      },
+      bootstrap
+    }))
+    const referrer = dgram.createSocket('udp4')
+    await promisify(referrer.bind.bind(referrer))()
+    const connecting = client.connect({
+      host: '127.0.0.1',
+      port: port,
+      referrer: {
+        host: '127.0.0.1',
+        port: referrer.address().port
+      }
+    })
+    // simulate nw failure
+    const { tcp } = nw
+    tcp.close()
+    await once(tcp, 'close')
+    const { socket, isTcp } = await connecting
+    is(isTcp, false, 'UDP socket')
+    const testErr = Error('test')
+    const { destroy } = socket
+    socket.destroy = (err) => {
+      is(err, testErr, 'error passed')
+      socket.destroy = destroy
+      return destroy.call(socket, err)
+    }
+    socket.emit('error', testErr)
+    await nw.close()
+    await promisify(referrer.close.bind(referrer))()
+    // this scenario causes client peer's utp instance
+    // to become unclosable, unref in order to allow
+    // process to exit
+    client.utp.unref()
+    client.close()
+    closeDht()
+  } finally {
+    compatifyTcp.off()
+  }
+})
