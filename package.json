@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "tap -T test/*.test.js && standard --fix",
-    "cov": "tap -T --100 --coverage-report=html test/*.test.js",
+    "cov": "tap -T --100 test/*.test.js",
     "ci": "standard && npm run cov"
   },
   "repository": {
