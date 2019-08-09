@@ -85,8 +85,12 @@ class NetworkResource extends Nanoresource {
     function onconnect () {
       const socket = this
       if (self.closed || connected || timedout) return socket.destroy()
-
       clearTimeout(timeout)
+      const straggler = active.find((socket) => socket !== this)
+      if (straggler) {
+        --closes
+        straggler.destroy()
+      }
       connected = true
       self.sockets.add(socket)
       cb(null, socket, tcp === socket)

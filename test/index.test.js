@@ -529,15 +529,6 @@ test('"Could not connect" error when peer connection closes after retries start 
       client.tcp.emit('error', Error('test'))
     }
     const connecting = client.connect({
-      bind () {
-        // guard against any possibility of holepunching
-        // leading to utp connection which could lead to
-        // unwanted modification of the `closes` counter
-        const { holepunch } = client.discovery
-        client.discovery.holepunch = () => {
-          client.discovery.holepunch = holepunch
-        }
-      },
       host: '127.0.0.1',
       port: nw.address().port,
       referrer: {
