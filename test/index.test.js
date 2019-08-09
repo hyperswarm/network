@@ -605,7 +605,7 @@ test('attempt to connect from closed peer', async ({ rejects }) => {
   await client.bind()
   await client.close()
   const host = '127.0.0.1'
-  await rejects(client.connect({ port, host }), Error('All sockets failed'))
+  await rejects(client.connect({ port, host }), Error('Closed before connected'))
   await nw.close()
 })
 
@@ -828,4 +828,18 @@ test('destroys socket on error (utp)', async ({ is, plan }) => {
   } finally {
     compatifyTcp.off()
   }
+})
+
+test('connect and close before connection established', async ({ rejects, pass }) => {
+  const nw = promisifyApi(network())
+  await nw.bind()
+  const client = promisifyApi(network())
+  const { port } = nw.address()
+  const host = '127.0.0.1'
+  const connecting = client.connect({ port, host })
+  rejects(connecting, 'Closed before connected')
+  await client.close()
+  pass('client closed')
+  await nw.close()
+  pass('network closed')
 })

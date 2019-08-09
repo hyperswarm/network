@@ -18,6 +18,7 @@ class NetworkResource extends Nanoresource {
     this.discovery = null
     this.options = opts
     this.sockets = new Set()
+    this.connecting = false
     this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
@@ -46,13 +47,13 @@ class NetworkResource extends Nanoresource {
     let connected = false
     let active = [tcp]
     let closes = 1
+    this.connecting = true
     tcp.on('error', ontcperror)
     tcp.on('connect', onconnect)
     tcp.on('close', onclose)
     if (!peer.referrer) return
     closes++
     this.open(onopen)
-
     function onopen (err) {
       if (err) {
         if (!--closes) return cb(new Error('Could not connect'))
@@ -83,6 +84,7 @@ class NetworkResource extends Nanoresource {
     }
 
     function onconnect () {
+      self.connecting = false
       const socket = this
       if (self.closed || connected || timedout) return socket.destroy()
 
@@ -94,9 +96,16 @@ class NetworkResource extends Nanoresource {
 
     function onclose () {
       self.sockets.delete(this) // only one of the sockets are added but this still works
-      if (!--closes && !connected && !timedout) {
+      const msg = self.closed
+        ? 'Closed before connected'
+        : 'All sockets failed'
+
+      if (self.closed || (!--closes && !connected && !timedout)) {
+        closes = 0
+        connected = false
+        self.connecting = false
         clearTimeout(timeout)
-        cb(new Error('All sockets failed'))
+        cb(new Error(msg))
       }
     }
   }
@@ -123,6 +132,16 @@ class NetworkResource extends Nanoresource {
     }
     this.preferredPort = preferredPort || 0
     this.open(cb)
+  }
+
+  close (...args) {
+    if (this.connecting) {
+      for (const socket of this.sockets) {
+        socket.destroy(Error('close called before connected'))
+      }
+      this.sockets.clear()
+    }
+    return super.close(...args)
   }
 
   _open (cb) {
