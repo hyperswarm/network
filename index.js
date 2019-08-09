@@ -87,6 +87,11 @@ class NetworkResource extends Nanoresource {
       }
 
       clearTimeout(timeout)
+      const straggler = active.find((socket) => socket !== this)
+      if (straggler) {
+        --closes
+        straggler.destroy()
+      }
       connected = true
       self.sockets.add(socket)
       cb(null, socket, tcp === socket)
