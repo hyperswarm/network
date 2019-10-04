@@ -18,6 +18,7 @@ class NetworkResource extends Nanoresource {
     this.discovery = null
     this.options = opts
     this.sockets = new Set()
+    this._announceLocalAddress = !!opts.announceLocalAddress
     this._onbind = opts.bind || noop
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
@@ -104,17 +105,20 @@ class NetworkResource extends Nanoresource {
   announce (key, { lookup = false } = {}) {
     if (!this.discovery) throw new Error('Bind before announcing')
     const localPort = this.tcp.address().port
-    return this.discovery.announce(key, { port: 0, localPort, lookup })
+    const localAddress = this._localAddress()
+    return this.discovery.announce(key, { port: 0, localPort, localAddress, lookup })
   }
 
   lookupOne (key, cb) {
     if (!this.discovery) throw new Error('Bind before doing a lookup')
-    this.discovery.lookupOne(key, cb)
+    const localAddress = this._localAddress()
+    this.discovery.lookupOne(key, { localAddress }, cb)
   }
 
   lookup (key) {
     if (!this.discovery) throw new Error('Bind before doing a lookup')
-    return this.discovery.lookup(key)
+    const localAddress = this._localAddress()
+    return this.discovery.lookup(key, { localAddress })
   }
 
   bind (preferredPort, cb) {
@@ -123,6 +127,16 @@ class NetworkResource extends Nanoresource {
     }
     this.preferredPort = preferredPort || 0
     this.open(cb)
+  }
+
+  _localAddress () {
+    if (!this._announceLocalAddress) return null
+    const ip = localIp()
+    if (!ip) return null
+    return {
+      host: ip,
+      port: this.tcp.address().port
+    }
   }
 
   _open (cb) {
@@ -216,5 +230,19 @@ function listen (server, port, cb) {
 }
 
 function noop () {}
+
+function localIp () {
+  const os = require('os')
+  const nets = os.networkInterfaces()
+  for (const name of Object.keys(nets)) {
+    const addrs = nets[name]
+    for (const addr of addrs) {
+      if (!addr.internal && addr.family === 'IPv4') {
+        return addr.address
+      }
+    }
+  }
+  return null
+}
 
 module.exports.NetworkResource = NetworkResource

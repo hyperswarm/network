@@ -28,7 +28,7 @@
   },
   "homepage": "https://github.com/hyperswarm/network#readme",
   "dependencies": {
-    "@hyperswarm/discovery": "^1.2.0",
+    "@hyperswarm/discovery": "^1.6.0",
     "nanoresource": "^1.0.0",
     "utp-native": "^2.1.3"
   },
