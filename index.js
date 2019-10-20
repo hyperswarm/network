@@ -87,6 +87,11 @@ class NetworkResource extends Nanoresource {
       const socket = this
       if (self.closed || connected || timedout) return socket.destroy()
 
+      // eagerly destroy dead sockets by now
+      for (const a of active) {
+        if (a !== socket) a.destroy()
+      }
+
       clearTimeout(timeout)
       connected = true
       self.sockets.add(socket)
