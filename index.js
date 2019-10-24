@@ -55,10 +55,7 @@ class NetworkResource extends Nanoresource {
     this.open(onopen)
 
     function onopen (err) {
-      if (err) {
-        if (!--closes) return cb(new Error('Could not connect'))
-        return
-      }
+      if (err) return onerror(err)
       self.discovery.holepunch(peer, onholepunch)
     }
 
@@ -70,10 +67,7 @@ class NetworkResource extends Nanoresource {
 
     function onholepunch (err) {
       if (connected || timedout) return
-      if (err) {
-        if (!--closes) return cb(err)
-        return
-      }
+      if (err) return onerror(err)
 
       const utp = self.utp.connect(peer.port, peer.host)
 
@@ -98,12 +92,16 @@ class NetworkResource extends Nanoresource {
       cb(null, socket, tcp === socket)
     }
 
-    function onclose () {
-      self.sockets.delete(this) // only one of the sockets are added but this still works
+    function onerror (err) {
       if (!--closes && !connected && !timedout) {
         clearTimeout(timeout)
-        cb(new Error('All sockets failed'))
+        cb(err || new Error('All sockets failed'))
       }
+    }
+
+    function onclose () {
+      self.sockets.delete(this) // only one of the sockets are added but this still works
+      onerror(null)
     }
   }
 
