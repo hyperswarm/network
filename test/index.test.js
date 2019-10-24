@@ -509,7 +509,7 @@ test('holepunch attempt resulting from referrer node fails before tcp connection
   closeDht()
 })
 
-test('"Could not connect" error when peer connection closes after retries start but before retry count is reached', async ({ rejects }) => {
+test('"All sockets failed" trigger when bind fails and tcp fails after', async ({ rejects }) => {
   compatifyTcp.on()
   try {
     const { bootstrap, closeDht } = await dhtBootstrap()
@@ -522,22 +522,13 @@ test('"Could not connect" error when peer connection closes after retries start 
     var count = 0
     client.tcp.listen = async (port) => {
       count++
+      client.tcp.emit('error', Error('test'))
       if (count === 4) {
         compatifyTcp.emitSocketClose()
         await nw.close() // create a closes === 0 situation
       }
-      client.tcp.emit('error', Error('test'))
     }
     const connecting = client.connect({
-      bind () {
-        // guard against any possibility of holepunching
-        // leading to utp connection which could lead to
-        // unwanted modification of the `closes` counter
-        const { holepunch } = client.discovery
-        client.discovery.holepunch = () => {
-          client.discovery.holepunch = holepunch
-        }
-      },
       host: '127.0.0.1',
       port: nw.address().port,
       referrer: {
@@ -545,7 +536,8 @@ test('"Could not connect" error when peer connection closes after retries start 
         port: referrer.address().port
       }
     })
-    await rejects(() => connecting, Error('Could not connect'))
+
+    await rejects(() => connecting, Error('All sockets failed'))
     await client.close()
     await promisify(referrer.close.bind(referrer))()
     closeDht()
