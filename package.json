@@ -6,7 +6,7 @@
   "scripts": {
     "test": "tap -T test/*.test.js && standard --fix",
     "cov": "tap -T --100 test/*.test.js",
-    "ci": "standard && npm run cov"
+    "ci": "standard && tap -T test/*.test.js"
   },
   "repository": {
     "type": "git",
