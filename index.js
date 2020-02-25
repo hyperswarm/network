@@ -30,6 +30,7 @@ class NetworkResource extends Nanoresource {
   }
 
   _onincoming (isTCP, socket) {
+    if (isTCP) socket.setNoDelay(true)
     this.sockets.add(socket)
     socket.on('close', this._removeSocket.bind(this, socket))
     this._onsocket(socket, isTCP)
@@ -47,6 +48,7 @@ class NetworkResource extends Nanoresource {
     let connected = false
     let active = [tcp]
     let closes = 1
+    tcp.setNoDelay(true)
     tcp.on('error', ontcperror)
     tcp.on('connect', onconnect)
     tcp.on('close', onclose)
