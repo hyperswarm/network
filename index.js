@@ -28,11 +28,6 @@ class NetworkResource extends Nanoresource {
     this.tcp.on('connection', this._onincoming.bind(this, true))
   }
 
-  get ephemeral () {
-    if (!this.discovery) return this._ephemeral !== false
-    return this.discovery.ephemeral
-  }
-
   _onincoming (isTCP, socket) {
     this.sockets.add(socket)
     socket.on('close', this._removeSocket.bind(this, socket))
