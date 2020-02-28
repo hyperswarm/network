@@ -23,8 +23,7 @@ class NetworkResource extends Nanoresource {
     this._onclose = opts.close || noop
     this._onsocket = opts.socket || noop
     this._bootstrap = opts.bootstrap
-    this._ephemeral = opts.ephemeral !== false
-
+    this._ephemeral = opts.ephemeral
     this.utp.on('connection', this._onincoming.bind(this, false))
     this.tcp.on('connection', this._onincoming.bind(this, true))
   }
@@ -159,6 +158,8 @@ class NetworkResource extends Nanoresource {
     function onlisten () {
       self.discovery = discovery({
         bootstrap: self._bootstrap,
+        // pass original opts.ephemeral (stored on self._ephemeral)
+        // to preserve potential `undefined` value for adaptive ephemerality
         ephemeral: self._ephemeral,
         socket: self.utp
       })
