@@ -106,11 +106,11 @@ class NetworkResource extends Nanoresource {
     }
   }
 
-  announce (key, { lookup = false } = {}) {
+  announce (key, { lookup = false, includeLength = false, length } = {}) {
     if (!this.discovery) throw new Error('Bind before announcing')
     const localPort = this.tcp.address().port
     const localAddress = this._localAddress()
-    return this.discovery.announce(key, { port: 0, localPort, localAddress, lookup })
+    return this.discovery.announce(key, { port: 0, localPort, localAddress, lookup, includeLength, length })
   }
 
   lookupOne (key, cb) {
@@ -119,10 +119,10 @@ class NetworkResource extends Nanoresource {
     this.discovery.lookupOne(key, { localAddress }, cb)
   }
 
-  lookup (key) {
+  lookup (key, { includeLength = false } = {}) {
     if (!this.discovery) throw new Error('Bind before doing a lookup')
     const localAddress = this._localAddress()
-    return this.discovery.lookup(key, { localAddress })
+    return this.discovery.lookup(key, { localAddress, includeLength })
   }
 
   bind (preferredPort, cb) {
