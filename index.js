@@ -30,6 +30,7 @@ class NetworkResource extends Nanoresource {
 
   _onincoming (isTCP, socket) {
     if (isTCP) socket.setNoDelay(true)
+    else socket.on('end', noHalfOpen) // utp defaults to halfOpen so end->finish like tcp
     this.sockets.add(socket)
     socket.on('close', this._removeSocket.bind(this, socket))
     this._onsocket(socket, isTCP)
@@ -249,6 +250,10 @@ function localIp () {
     }
   }
   return null
+}
+
+function noHalfOpen () {
+  this.end()
 }
 
 module.exports.NetworkResource = NetworkResource
