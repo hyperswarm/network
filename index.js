@@ -12,6 +12,7 @@ class NetworkResource extends Nanoresource {
   constructor (opts) {
     if (!opts) opts = {}
     super()
+    this.id = opts.id || null
     this.preferredPort = opts.preferredPort || 0
     this.tcp = net.createServer()
     this.utp = utp()
@@ -158,6 +159,7 @@ class NetworkResource extends Nanoresource {
 
     function onlisten () {
       self.discovery = discovery({
+        id: self.id,
         bootstrap: self._bootstrap,
         // pass original opts.ephemeral (stored on self._ephemeral)
         // to preserve potential `undefined` value for adaptive ephemerality
