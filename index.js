@@ -147,14 +147,23 @@ class NetworkResource extends Nanoresource {
 
   _open (cb) {
     const self = this
+    const ports = [
+      this.preferredPort,
+      this.preferredPort ? this.preferredPort + 1 : 0,
+      this.preferredPort ? this.preferredPort + 2 : 0,
+      0,
+      0,
+      0,
+      0
+    ]
 
-    let tries = 1
-    listenBoth(this.tcp, this.utp, this.preferredPort, retry)
+    let tries = 0
+    listenBoth(this.tcp, this.utp, ports[0], retry)
 
     function retry (err) {
       if (!err) return onlisten()
-      if (++tries === 5) return cb(err)
-      listenBoth(self.tcp, self.utp, 0, retry)
+      if (++tries >= ports.length) return cb(err)
+      listenBoth(self.tcp, self.utp, ports[tries], retry)
     }
 
     function onlisten () {

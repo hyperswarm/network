@@ -439,7 +439,7 @@ test('retries after binding error when attempting to connect to peer with referr
       port: referrer.address().port
     }
   })
-  is(count, 4)
+  is(count, 7)
   await client.close()
   await nw.close()
   await promisify(referrer.close.bind(referrer))()
@@ -523,7 +523,7 @@ test('"All sockets failed" trigger when bind fails and tcp fails after', async (
     client.tcp.listen = async (port) => {
       count++
       client.tcp.emit('error', Error('test'))
-      if (count === 4) {
+      if (count === 7) {
         compatifyTcp.emitSocketClose()
         await nw.close() // create a closes === 0 situation
       }
