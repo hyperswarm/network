@@ -189,6 +189,8 @@ class NetworkResource extends Nanoresource {
 
     this.discovery.destroy()
     this.discovery.on('close', ondiscoveryclose)
+    this.utp.maxConnections = -1
+    this.tcp.maxConnections = -1
 
     function ondiscoveryclose () {
       let missing = 2
