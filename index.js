@@ -13,6 +13,8 @@ class NetworkResource extends Nanoresource {
     if (!opts) opts = {}
     super()
     this.id = opts.id || null
+    this.port = opts.port || 0
+    this.announcePort = opts.announcePort || 0
     this.preferredPort = opts.preferredPort || 0
     this.tcp = net.createServer()
     this.utp = utp()
@@ -108,7 +110,7 @@ class NetworkResource extends Nanoresource {
     }
   }
 
-  announce (key, { lookup = false, port = 0 } = {}) {
+  announce (key, { lookup = false, port = this.announcePort } = {}) {
     if (!this.discovery) throw new Error('Bind before announcing')
     const localPort = port || this.tcp.address().port
     const localAddress = this._localAddress()
@@ -147,15 +149,17 @@ class NetworkResource extends Nanoresource {
 
   _open (cb) {
     const self = this
-    const ports = [
-      this.preferredPort,
-      this.preferredPort ? this.preferredPort + 1 : 0,
-      this.preferredPort ? this.preferredPort + 2 : 0,
-      0,
-      0,
-      0,
-      0
-    ]
+    const ports = this.port !== 0
+      ? [ this.port ]
+      : [
+        this.preferredPort,
+        this.preferredPort ? this.preferredPort + 1 : 0,
+        this.preferredPort ? this.preferredPort + 2 : 0,
+        0,
+        0,
+        0,
+        0
+      ]
 
     let tries = 0
     listenBoth(this.tcp, this.utp, ports[0], retry)
