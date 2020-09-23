@@ -27,6 +27,7 @@ class NetworkResource extends Nanoresource {
     this._onsocket = opts.socket || noop
     this._bootstrap = opts.bootstrap
     this._ephemeral = opts.ephemeral
+    this.active = { utp: 0, tcp: 0 }
     this.utp.on('connection', this._onincoming.bind(this, false))
     this.tcp.on('connection', this._onincoming.bind(this, true))
   }
@@ -52,6 +53,8 @@ class NetworkResource extends Nanoresource {
     let active = [tcp]
     let closes = 1
     tcp.setNoDelay(true)
+    self.active.tcp++
+    tcp.on('close', () => self.active.tcp--)
     tcp.on('error', ontcperror)
     tcp.on('connect', onconnect)
     tcp.on('close', onclose)
@@ -76,6 +79,8 @@ class NetworkResource extends Nanoresource {
 
       const utp = self.utp.connect(peer.port, peer.host)
 
+      self.active.utp++
+      utp.on('close', () => self.active.utp--)
       utp.on('error', onutperror)
       utp.on('connect', onconnect)
       utp.on('close', onclose)
